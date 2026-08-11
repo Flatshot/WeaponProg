@@ -1,0 +1,18 @@
+## Interface: 11507
+## Title: WeaponProg
+## Notes: Shows where Classic Era weapons come from (world drop, quest, dungeon, etc.) in tooltips and a browsable window.
+## Author: Your Name
+## Version: 0.1.0
+## SavedVariables: WeaponProgDB
+## IconTexture: Interface\ICONS\INV_Sword_04
+
+# --- Embedded libraries (Ace3 + LibDBIcon) ---
+embeds.xml
+
+# --- Addon code ---
+Core.lua
+Sources.lua
+Data\Weapons.lua
+Tooltip.lua
+Browser.lua
+Minimap.lua
