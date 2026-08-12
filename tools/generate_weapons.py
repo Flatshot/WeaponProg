@@ -436,6 +436,36 @@ def effective_req(rec, quest_levels):
     return req
 
 
+# Race bitmask -> faction. Alliance group = 77 (Human1+Dwarf4+NightElf8+Gnome64),
+# Horde group = 178 (Orc2+Undead16+Tauren32+Troll128). Every value in the Classic
+# quest DB sets bits within a single faction (subsets occur but never mix), and 0
+# means no race restriction. So a masked test classifies every case.
+ALLIANCE_MASK, HORDE_MASK = 77, 178
+
+
+def _race_faction(r):
+    if not r:
+        return None  # no restriction -> both
+    a, h = (r & ALLIANCE_MASK) != 0, (r & HORDE_MASK) != 0
+    return "A" if (a and not h) else "H" if (h and not a) else None
+
+
+def weapon_faction(rec, quest_races):
+    """Faction a quest-reward weapon is obtainable by, as the UNION across its
+    questRewards: a mirrored Alliance+Horde quest pair (or any both/unknown quest)
+    yields both. Returns 'A', 'H', or None (both/unknown)."""
+    a = h = False
+    for q in _list_from_parsed(rec.get(6)):
+        f = _race_faction(quest_races.get(q))
+        if f == "A":
+            a = True
+        elif f == "H":
+            h = True
+        else:
+            a = h = True  # a both/unknown reward quest => obtainable by both
+    return "A" if (a and not h) else "H" if (h and not a) else None
+
+
 def resolve_source(item_id, rec, ctx):
     """Return (src_key, detail_string)."""
     al_source = ctx["al_source"]
@@ -531,7 +561,9 @@ HEADER = '''--[[
 
     Record format:
         [itemID] = { name = <string>, type = <weapon-type key>,
-                     req = <number>, src = <source key>, detail = <string> }
+                     req = <number>, src = <source key>, detail = <string>,
+                     faction = "A"|"H" }   -- optional; QUEST items only, omitted
+                                           -- when obtainable by both factions
     (type keys: Sources.lua ns.WEAPON_TYPE_ORDER; src keys: ns.SOURCE)
 
     Core.lua copies this global into ns.WEAPONS on ADDON_LOADED, then nils it so
@@ -554,11 +586,13 @@ def build():
 
     print("Reading Questie NPC / quest names ...")
     npc_names = load_names(NPC_DB, "npcData = [[return", 1) if NPC_DB.exists() else {}
-    quest_rows = load_names(QUEST_DB, "questData = [[return", 5) if QUEST_DB.exists() else {}
+    quest_rows = load_names(QUEST_DB, "questData = [[return", 6) if QUEST_DB.exists() else {}
     quest_names = {qid: scalar_token(row[0]) for qid, row in quest_rows.items() if row}
     # questLevel is quest field [5] (row index 4); used to fill in req for
     # quest-reward weapons whose own equip requiredLevel is 0.
     quest_levels = {qid: scalar_token(row[4]) for qid, row in quest_rows.items() if len(row) >= 5}
+    # requiredRaces is quest field [6] (row index 5); a race bitmask -> faction.
+    quest_races = {qid: scalar_token(row[5]) for qid, row in quest_rows.items() if len(row) >= 6}
     npc_names = {nid: scalar_token(row[0]) for nid, row in npc_names.items() if row}
 
     print("Reading AtlasLoot source index ...")
@@ -601,14 +635,17 @@ def build():
         if item_id in OVERRIDES:  # manual corrections win over everything
             src, detail = OVERRIDES[item_id]
 
-        rows.append((item_id, name, wtype, req, src, detail))
+        # Faction of quest rewards, for the browser's quest-label colour.
+        faction = weapon_faction(rec, quest_races) if src == "QUEST" else None
+
+        rows.append((item_id, name, wtype, req, src, detail, faction))
         per_src[src] = per_src.get(src, 0) + 1
         per_type[wtype] = per_type.get(wtype, 0) + 1
 
     rows.sort(key=lambda r: r[0])
 
     lines = [HEADER, "WeaponProgData = {\n"]
-    for item_id, name, wtype, req, src, detail in rows:
+    for item_id, name, wtype, req, src, detail, faction in rows:
         parts = [
             f'name = "{lua_escape(name)}"',
             f'type = "{wtype}"',
@@ -617,6 +654,8 @@ def build():
         ]
         if detail:
             parts.append(f'detail = "{lua_escape(detail)}"')
+        if faction:  # "A"/"H" only; both/unknown is omitted (browser -> yellow)
+            parts.append(f'faction = "{faction}"')
         lines.append(f"    [{item_id}] = {{ {', '.join(parts)} }},\n")
     lines.append("}\n")
 
