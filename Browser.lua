@@ -11,6 +11,37 @@ local AceGUI = LibStub("AceGUI-3.0")
 
 local BRACKET_SIZE = 10
 
+-- Copy-a-URL popup. The addon sandbox can't open a browser, so clicking a weapon
+-- shows its Wowhead link pre-selected for the user to Ctrl+C and paste. `data` is
+-- the URL; the first text arg is the item name (see openWowhead).
+StaticPopupDialogs["WEAPONPROG_WOWHEAD_URL"] = {
+    text = "Wowhead — %s\nPress Ctrl+C to copy, then paste in your browser.",
+    button1 = CLOSE or "Close",
+    hasEditBox = true,
+    editBoxWidth = 260,
+    OnShow = function(self)
+        local eb = self.editBox or self.EditBox
+        if eb then
+            eb:SetText(self.data or "")
+            eb:HighlightText()
+            eb:SetFocus()
+        end
+    end,
+    EditBoxOnEscapePressed = function(self) self:GetParent():Hide() end,
+    EditBoxOnEnterPressed  = function(self) self:GetParent():Hide() end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,  -- avoid taint from tainted UI frames at index 1/2
+}
+
+-- Wowhead's Classic (Era/HC) database path is /classic/item=<id>.
+local function openWowhead(itemID, itemName)
+    StaticPopup_Show("WEAPONPROG_WOWHEAD_URL",
+        itemName or ("item " .. itemID), nil,
+        "https://www.wowhead.com/classic/item=" .. itemID)
+end
+
 -- Browser view state, module-level so the async recolor handler can reach it.
 local currentView       -- { container, index, path } of the panel on screen
 local currentIDs = {}   -- set of itemIDs currently displayed
@@ -145,6 +176,18 @@ local function makeRow(scroll, entry)
         GameTooltip:Show()
     end)
     row:SetCallback("OnLeave", function() GameTooltip:Hide() end)
+    -- Shift-click drops the item link into the chat box (WoW convention); a plain
+    -- click opens the Wowhead-URL copy popup. Shift falls through to the popup if
+    -- the link isn't cached yet (so the click is never a no-op).
+    row:SetCallback("OnClick", function()
+        if IsShiftKeyDown() then
+            local link = select(2, GetItemInfo(entry.id))
+            if link and ChatEdit_InsertLink and ChatEdit_InsertLink(link) then
+                return
+            end
+        end
+        openWowhead(entry.id, rec.name)
+    end)
     scroll:AddChild(row)
 end
 

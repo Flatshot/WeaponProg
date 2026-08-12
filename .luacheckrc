@@ -18,6 +18,7 @@ globals = {
     "SlashCmdList",
     "SLASH_WEAPONPROG1",
     "SLASH_WEAPONPROG2",
+    "StaticPopupDialogs",    -- Blizzard table we register a dialog into
 }
 
 -- WoW API surface we read (read-only). Not exhaustive for all of WoW, just what
@@ -33,6 +34,8 @@ read_globals = {
     "GetItemIcon", "GetItemInfo", "GetItemQualityColor",
     "C_TooltipInfo", "TooltipDataProcessor", "TooltipUtil", "Enum",
     "C_Item",
+    -- popup + chat-link (row click -> Wowhead URL / insert item link)
+    "StaticPopup_Show", "IsShiftKeyDown", "ChatEdit_InsertLink", "CLOSE",
     -- libraries (provided by embeds.xml at runtime)
     "LibStub",
 }
