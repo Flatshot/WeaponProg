@@ -27,6 +27,11 @@ ns.SOURCE = {
     UNKNOWN = { label = "Unknown",        color = "999999", icon = "Interface\\ICONS\\INV_Misc_QuestionMark" },
 }
 
+-- Quest labels are recolored by the rewarding quest's faction: Alliance blue,
+-- Horde red. Weapons obtainable by both factions have no `faction` field and keep
+-- SOURCE.QUEST's yellow. (The `faction` field is baked into QUEST records only.)
+ns.QUEST_FACTION_COLOR = { A = "1e90ff", H = "ff3030" }
+
 -- ---------------------------------------------------------------------------
 -- Weapon types (drives the browser's top-level grouping; ordered for display)
 -- ---------------------------------------------------------------------------

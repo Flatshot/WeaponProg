@@ -103,10 +103,18 @@ local function makeRow(scroll, entry)
     row:SetImageSize(20, 20)
     currentIDs[entry.id] = true
     local qhex = qualityHex(entry.id)  -- nil until cached; async handler recolors later
+
+    -- Quest labels take the faction colour (Alliance blue / Horde red); both-faction
+    -- and non-quest labels keep the source's own colour.
+    local labelColor = src.color
+    if rec.src == "QUEST" and rec.faction then
+        labelColor = ns.QUEST_FACTION_COLOR[rec.faction] or src.color
+    end
+
     row:SetText(
         ns.Colorize(qhex or "ffffff", rec.name or ("item:" .. entry.id))
         .. "   " .. ns.Colorize("aaaaaa", "Req Lvl " .. (rec.req or "?"))
-        .. "   " .. ns.Colorize(src.color, src.label)
+        .. "   " .. ns.Colorize(labelColor, src.label)
     )
     row:SetCallback("OnEnter", function(widget)
         GameTooltip:SetOwner(widget.frame, "ANCHOR_RIGHT")

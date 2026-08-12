@@ -26,8 +26,14 @@ local function addLines(tooltip, itemID)
     tooltip.__weaponProgItem = itemID
 
     local src = ns.GetSourceInfo(rec.src)
+    -- Quest source takes the faction colour (Alliance blue / Horde red); both-faction
+    -- and non-quest sources keep the source's own colour. Mirrors the browser.
+    local labelColor = src.color
+    if rec.src == "QUEST" and rec.faction then
+        labelColor = ns.QUEST_FACTION_COLOR[rec.faction] or src.color
+    end
     tooltip:AddLine(" ") -- spacer
-    tooltip:AddLine(ns.Colorize("33ff99", "WeaponProg") .. ": " .. ns.Colorize(src.color, src.label))
+    tooltip:AddLine(ns.Colorize("33ff99", "WeaponProg") .. ": " .. ns.Colorize(labelColor, src.label))
     if rec.detail and rec.detail ~= "" then
         tooltip:AddLine(ns.Colorize("cccccc", rec.detail), nil, nil, nil, true) -- wrap = true
     end

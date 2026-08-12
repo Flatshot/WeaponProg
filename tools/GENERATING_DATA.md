@@ -42,6 +42,10 @@ Each entry in the global `WeaponProgData` table is keyed by **itemID**:
             src = "DUNGEON", detail = "Upper Blackrock Spire" },
 ```
 
+`faction` is an optional extra field on `src = "QUEST"` records — `"A"` (Alliance)
+or `"H"` (Horde) — used by the browser to color the quest label blue/red. It is
+omitted when the weapon is obtainable by both factions (the label stays yellow).
+
 ### Valid `type` keys
 Defined in [`Sources.lua`](../Sources.lua) `ns.WEAPON_TYPE_ORDER`:
 
@@ -80,6 +84,10 @@ Defined in `Sources.lua` `ns.SOURCE`:
      usable reference, so they'd otherwise fall back to World drop).
 3. **`detail`** — a human-readable origin built from Questie's names (dungeon/raid
    instance, quest name, vendor name, dropping NPC, or profession).
+4. **`faction`** (QUEST only) — from the rewarding quest's `requiredRaces` bitmask
+   (questDB field [6]): `alliance = (r & 77) ~= 0`, `horde = (r & 178) ~= 0`. Taken
+   as the **union** across the item's `questRewards`, so a mirrored Alliance+Horde
+   quest pair counts as both. Emitted as `"A"`/`"H"` only; both/unknown is omitted.
 
 ## Tuning the output
 
