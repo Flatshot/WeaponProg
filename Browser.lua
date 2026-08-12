@@ -17,15 +17,38 @@ local currentIDs = {}   -- set of itemIDs currently displayed
 local refreshPending = false
 local qualityEventFrame
 
--- Rarity/quality colour for an item, as a 6-hex string suitable for ns.Colorize.
--- Returns nil until the item's data is cached; GetItemInfo also requests the load,
--- and GET_ITEM_INFO_RECEIVED then drives a recolor (see setQualityEvents / build).
-local function qualityHex(itemID)
+-- Persistent scroll state handed to the ScrollFrame each rebuild so an async
+-- recolor doesn't snap the view back to the top. Reset only on a real tree
+-- navigation (see showContent's `resetScroll`).
+local scrollStatus = {}
+
+-- Resolved rarity/quality colours, keyed by itemID. A 6-hex string once known,
+-- or `false` for an item the client reports it can't resolve. Caching both means
+-- we never re-call GetItemInfo (and so never re-fire its server request) for an
+-- item we've already settled — which is what stops the recolor/rebuild loop.
+local qualityCache = {}
+
+-- Compute an item's quality colour as a 6-hex string, or nil if not yet cached.
+-- GetItemInfo also *requests* the load for uncached items; GET_ITEM_INFO_RECEIVED
+-- then resolves it once (see setQualityEvents / build).
+local function computeQualityHex(itemID)
     local _, _, quality = GetItemInfo(itemID)
     if not quality then return nil end
     local r, g, b = GetItemQualityColor(quality)
     return string.format("%02x%02x%02x",
         math.floor(r * 255 + 0.5), math.floor(g * 255 + 0.5), math.floor(b * 255 + 0.5))
+end
+
+-- Cached lookup used when building rows: returns a hex string, or nil while the
+-- item is still unresolved. Never re-requests an item already settled in the cache.
+local function qualityHex(itemID)
+    local cached = qualityCache[itemID]
+    if cached ~= nil then
+        return cached or nil          -- `false` (unresolvable) -> nil, no re-request
+    end
+    local hex = computeQualityHex(itemID)
+    if hex then qualityCache[itemID] = hex end  -- leave unresolved as nil for the event to settle
+    return hex
 end
 
 local function bracketIndex(req)
@@ -127,7 +150,9 @@ end
 
 local frame -- singleton AceGUI Frame
 
-local function showContent(container, index, path)
+-- resetScroll = true when the user actually navigates the tree (start at the top);
+-- the async recolor path passes false so a rebuild keeps the current scroll offset.
+local function showContent(container, index, path, resetScroll)
     container:ReleaseChildren()
 
     -- Remember what's on screen so the async quality-recolor handler can rebuild it.
@@ -142,6 +167,10 @@ local function showContent(container, index, path)
     -- whole content area; the heading lives as the first row inside the scroll.
     local scroll = AceGUI:Create("ScrollFrame")
     scroll:SetLayout("List")
+    -- Persist scroll offset across rebuilds. On real navigation start fresh at the
+    -- top; on an async recolor rebuild keep the offset so the view doesn't jump.
+    if resetScroll then wipe(scrollStatus) end
+    scroll:SetStatusTable(scrollStatus)
     container:AddChild(scroll)
 
     local heading = AceGUI:Create("Label")
@@ -199,10 +228,16 @@ local function build()
     end)
 
     -- Hidden frame that recolors rows as item data streams in from the server.
+    -- Each arrival is recorded in qualityCache *once* (colour on success, `false`
+    -- on failure) so we never react to or re-request that item again — otherwise a
+    -- single unresolvable itemID would re-fire this event every rebuild forever.
     if not qualityEventFrame then
         qualityEventFrame = CreateFrame("Frame")
-        qualityEventFrame:SetScript("OnEvent", function(_, _, itemID)
-            if itemID and currentIDs[itemID] then scheduleRefresh() end
+        qualityEventFrame:SetScript("OnEvent", function(_, _, itemID, success)
+            if not itemID or not currentIDs[itemID] then return end
+            if qualityCache[itemID] ~= nil then return end   -- already settled; ignore
+            qualityCache[itemID] = (success and computeQualityHex(itemID)) or false
+            scheduleRefresh()                                -- one refresh per newly-settled item
         end)
     end
     setQualityEvents(true)
@@ -211,7 +246,7 @@ local function build()
     tree:SetTree(buildTree(index))
     tree:SetLayout("Fill")
     tree:SetCallback("OnGroupSelected", function(container, _, path)
-        showContent(container, index, path)
+        showContent(container, index, path, true)  -- navigation: reset scroll to top
     end)
     frame:AddChild(tree)
 
